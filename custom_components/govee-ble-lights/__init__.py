@@ -7,9 +7,11 @@ from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN
 import logging
+
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[str] = ["light"]
+
 
 class Hub:
     def __init__(self, hass: HomeAssistant, address: str) -> None:

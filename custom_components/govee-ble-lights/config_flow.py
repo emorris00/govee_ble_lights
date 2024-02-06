@@ -9,7 +9,7 @@ from homeassistant.components.bluetooth import (
     async_discovered_service_info,
 )
 from homeassistant.config_entries import ConfigFlow
-from homeassistant.const import (CONF_ADDRESS, CONF_MODEL)
+from homeassistant.const import CONF_ADDRESS, CONF_MODEL
 from homeassistant.data_entry_flow import FlowResult
 
 from .const import DOMAIN
@@ -50,22 +50,17 @@ class GoveeConfigFlow(ConfigFlow, domain=DOMAIN):
         title = discovery_info.name
         if user_input is not None:
             model = user_input[CONF_MODEL]
-            return self.async_create_entry(title=title, data={
-                CONF_MODEL: model
-            })
+            return self.async_create_entry(title=title, data={CONF_MODEL: model})
 
         self._set_confirm_only()
-        placeholders = {
-            "name": title,
-            "model": "Device model"
-        }
+        placeholders = {"name": title, "model": "Device model"}
         self.context["title_placeholders"] = placeholders
         return self.async_show_form(
             step_id="bluetooth_confirm",
             description_placeholders=placeholders,
-            data_schema=vol.Schema({
-                vol.Required(CONF_MODEL): vol.In(self._available_models)
-            }),
+            data_schema=vol.Schema(
+                {vol.Required(CONF_MODEL): vol.In(self._available_models)}
+            ),
         )
 
     async def async_step_user(
@@ -78,9 +73,7 @@ class GoveeConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(address, raise_on_progress=False)
             self._abort_if_unique_id_configured()
             return self.async_create_entry(
-                title=self._discovered_devices[address], data={
-                    CONF_MODEL: model
-                }
+                title=self._discovered_devices[address], data={CONF_MODEL: model}
             )
 
         current_addresses = self._async_current_ids()
@@ -88,15 +81,17 @@ class GoveeConfigFlow(ConfigFlow, domain=DOMAIN):
             address = discovery_info.address
             if address in current_addresses or address in self._discovered_devices:
                 continue
-            self._discovered_devices[address] = (discovery_info.name)
+            self._discovered_devices[address] = discovery_info.name
 
         if not self._discovered_devices:
             return self.async_abort(reason="no_devices_found")
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema({
-                vol.Required(CONF_ADDRESS): vol.In(self._discovered_devices),
-                vol.Required(CONF_MODEL): vol.In(self._available_models)
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_ADDRESS): vol.In(self._discovered_devices),
+                    vol.Required(CONF_MODEL): vol.In(self._available_models),
+                }
+            ),
         )
