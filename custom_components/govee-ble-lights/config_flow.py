@@ -11,10 +11,10 @@ from homeassistant.components.bluetooth import (
 from homeassistant.config_entries import ConfigFlow
 from homeassistant.const import CONF_ADDRESS, CONF_MODEL
 from homeassistant.data_entry_flow import FlowResult
+import homeassistant.helpers.config_validation as cv
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_KEEP_ALIVE
 from pathlib import Path
-
 
 class GoveeConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
@@ -49,17 +49,21 @@ class GoveeConfigFlow(ConfigFlow, domain=DOMAIN):
         discovery_info = self._discovery_info
         title = discovery_info.name
         if user_input is not None:
-            model = user_input[CONF_MODEL]
-            return self.async_create_entry(title=title, data={CONF_MODEL: model})
+            return self.async_create_entry(title=title, data={
+                CONF_MODEL: user_input[CONF_MODEL],
+                CONF_KEEP_ALIVE: user_input[CONF_KEEP_ALIVE]
+            })
 
         self._set_confirm_only()
-        placeholders = {"name": title, "model": "Device model"}
+        placeholders = {"name": title}
         self.context["title_placeholders"] = placeholders
         return self.async_show_form(
             step_id="bluetooth_confirm",
-            description_placeholders=placeholders,
             data_schema=vol.Schema(
-                {vol.Required(CONF_MODEL): vol.In(self._available_models)}
+                {
+                    vol.Required(CONF_MODEL): vol.In(self._available_models),
+                    vol.Required(CONF_KEEP_ALIVE, default=False): cv.boolean
+                }
             ),
         )
 
@@ -69,11 +73,13 @@ class GoveeConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the user step to pick discovered device."""
         if user_input is not None:
             address = user_input[CONF_ADDRESS]
-            model = user_input[CONF_MODEL]
             await self.async_set_unique_id(address, raise_on_progress=False)
             self._abort_if_unique_id_configured()
             return self.async_create_entry(
-                title=self._discovered_devices[address], data={CONF_MODEL: model}
+                title=self._discovered_devices[address], data={
+                    CONF_MODEL: user_input[CONF_MODEL],
+                    CONF_KEEP_ALIVE: user_input[CONF_KEEP_ALIVE]
+                }
             )
 
         current_addresses = self._async_current_ids()
@@ -92,6 +98,7 @@ class GoveeConfigFlow(ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_ADDRESS): vol.In(self._discovered_devices),
                     vol.Required(CONF_MODEL): vol.In(self._available_models),
+                    vol.Required(CONF_KEEP_ALIVE, default=False): cv.boolean
                 }
             ),
         )

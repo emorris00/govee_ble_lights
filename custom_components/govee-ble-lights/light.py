@@ -1,10 +1,10 @@
 from __future__ import annotations
+from datetime import timedelta
 
 import array
 import logging
 import re
 
-from enum import IntEnum
 import bleak_retry_connector
 
 from bleak import BleakClient
@@ -18,10 +18,12 @@ from homeassistant.components.light import (
     LightEntityFeature,
 )
 
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_MODEL
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_KEEP_ALIVE, CommandType
 from pathlib import Path
 import json
 from .govee_utils import prepareSinglePacketData, prepareMultiplePacketsData
@@ -29,30 +31,24 @@ import base64
 
 _LOGGER = logging.getLogger(__name__)
 
+SCAN_INTERVAL = timedelta(seconds=2)
 UUID_CONTROL_CHARACTERISTIC = "00010203-0405-0607-0809-0a0b0c0d2b11"
-EFFECT_PARSE = re.compile("\[(\d+)/(\d+)/(\d+)/(\d+)]")
-
-class CommandType(IntEnum):
-    KEEP_ALIVE = [0xAA]
-    SET_POWER = [0x33, 0x01]
-    SET_BRIGHTNESS = [0x33, 0x04]
-    SET_RGB = [0x33, 0x05, 0x02]
-    SET_SCENE = [0x33, 0x05, 0x04]
-    SET_RGBWW_SEGMENTS = [0x33, 0x05, 0x15, 0x01]
-    SET_RELATIVE_BRIGHTNESS_SEGMENTS = [0x33, 0x05, 0x15, 0x02]
-    SET_RGB_SEGMENTS = [0x33, 0x05, 0x0B]
+EFFECT_PARSE = re.compile("\[(\d+)/(\d+)/(\d+)(?:/(\d+))?]")
 
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities
 ):
-    light = hass.data[DOMAIN][config_entry.entry_id]
     ble_device = bluetooth.async_ble_device_from_address(
-        hass, light.address.upper(), False
+        hass, config_entry.unique_id.upper(), False
     )
-    async_add_entities([GoveeBluetoothLight(light, ble_device, config_entry)])
+    async_add_entities([GoveeBluetoothLight(ble_device, config_entry)])
 
 
 class GoveeBluetoothLight(LightEntity):
+    _attr_has_entity_name = True
+    _attr_name = None
+
+    _attr_assumed_state = True
     _attr_color_mode = ColorMode.RGB
     _attr_supported_color_modes = {ColorMode.RGB}
     _attr_supported_features = LightEntityFeature(
@@ -61,10 +57,11 @@ class GoveeBluetoothLight(LightEntity):
         | LightEntityFeature.TRANSITION
     )
 
-    def __init__(self, light, ble_device, config_entry: ConfigEntry) -> None:
+    def __init__(self, ble_device, config_entry: ConfigEntry) -> None:
         """Initialize an bluetooth light."""
-        self._mac = light.address
-        self._model = config_entry.data["model"]
+        self._entry_id = config_entry.entry_id
+        self._mac = config_entry.unique_id
+        self._model = config_entry.data[CONF_MODEL]
         self._ble_device = ble_device
         self._state = None
         self._brightness = None
@@ -73,38 +70,58 @@ class GoveeBluetoothLight(LightEntity):
         )
 
     @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.unique_id)},
+            name="Govee {}".format(self._model),
+            manufacturer="Govee",
+            model=self._model,
+        )
+
+    @property
     def effect_list(self) -> list[str] | None:
         effect_list = []
         for categoryIdx, category in enumerate(self._data["data"]["categories"]):
             for sceneIdx, scene in enumerate(category["scenes"]):
                 for leffectIdx, lightEffect in enumerate(scene["lightEffects"]):
-                    for seffectIxd, specialEffect in enumerate(
-                        lightEffect["specialEffect"]
-                    ):
-                        # if 'supportSku' not in specialEffect or self._model in specialEffect['supportSku']:
-                        # Workaround cause we need to store some metadata in effect (effect names not unique)
+                    found = False
+                    if lightEffect["specialEffect"]:
+                        for seffectIxd, specialEffect in enumerate(
+                            lightEffect["specialEffect"]
+                        ):
+                            if (
+                                not specialEffect["supportSku"]
+                                or self._model in specialEffect["supportSku"]
+                            ):
+                                found = True
+                                effect_list.append(
+                                    "{} - {} - {} [{}/{}/{}/{}]".format(
+                                        category["categoryName"],
+                                        scene["sceneName"],
+                                        lightEffect["scenceName"],
+                                        categoryIdx,
+                                        sceneIdx,
+                                        leffectIdx,
+                                        seffectIxd,
+                                    )
+                                )
+                                break
+                    if not found:
                         effect_list.append(
-                            "%s - %s - %s [%s/%s/%s/%s]".format(
+                            "{} - {} - {} [{}/{}/{}]".format(
                                 category["categoryName"],
                                 scene["sceneName"],
                                 lightEffect["scenceName"],
                                 categoryIdx,
                                 sceneIdx,
                                 leffectIdx,
-                                seffectIxd,
                             )
                         )
 
         return effect_list
 
     @property
-    def name(self) -> str:
-        """Return the name of the switch."""
-        return "GOVEE Light"
-
-    @property
     def unique_id(self) -> str:
-        """Return a unique, Home Assistant friendly identifier for this entity."""
         return self._mac.replace(":", "")
 
     @property
@@ -115,6 +132,14 @@ class GoveeBluetoothLight(LightEntity):
     def is_on(self) -> bool | None:
         """Return true if light is on."""
         return self._state
+
+    async def async_update(self) -> None:
+        if (
+            self.hass.data.get(DOMAIN, {})
+            .get(self._entry_id, {})
+            .get(CONF_KEEP_ALIVE, False)
+        ):
+            await self._sendCommand(prepareSinglePacketData(CommandType.KEEP_ALIVE))
 
     async def async_turn_on(self, **kwargs) -> None:
         commands = [prepareSinglePacketData(CommandType.SET_POWER, [0x1])]
@@ -131,9 +156,7 @@ class GoveeBluetoothLight(LightEntity):
         if ATTR_RGB_COLOR in kwargs:
             red, green, blue = kwargs.get(ATTR_RGB_COLOR)
             commands.append(
-                prepareSinglePacketData(
-                    CommandType.SET_RGB, [red, green, blue]
-                )
+                prepareSinglePacketData(CommandType.SET_RGB, [red, green, blue])
             )
 
         if ATTR_EFFECT in kwargs:
@@ -145,19 +168,29 @@ class GoveeBluetoothLight(LightEntity):
                 categoryIndex = int(search.group(1))
                 sceneIndex = int(search.group(2))
                 lightEffectIndex = int(search.group(3))
-                specialEffectIndex = int(search.group(4))
 
                 category = self._data["data"]["categories"][categoryIndex]
                 scene = category["scenes"][sceneIndex]
                 lightEffect = scene["lightEffects"][lightEffectIndex]
-                specialEffect = lightEffect["specialEffect"][specialEffectIndex]
+                sceneCode = int(lightEffect["sceneCode"])
+                scenceParam = lightEffect["scenceParam"]
 
-                # Prepare packets to send big payload in separated chunks
-                for command in prepareMultiplePacketsData(
-                    [*base64.b64decode(specialEffect["scenceParam"])],
-                ):
-                    commands.append(command)
-                    # I think there needs to be the actual set_scene command here?
+                if search.group(4) != None:
+                    specialEffectIndex = int(search.group(4))
+                    specialEffect = lightEffect["specialEffect"][specialEffectIndex]
+                    scenceParam = specialEffect["scenceParam"]
+
+                if scenceParam:
+                    for command in prepareMultiplePacketsData(
+                        base64.b64decode(scenceParam)
+                    ):
+                        commands.append(command)
+
+                commands.append(
+                    prepareSinglePacketData(
+                        CommandType.SET_SCENE, sceneCode.to_bytes(2, "little")
+                    )
+                )
 
         for command in commands:
             await self._sendCommand(command)
@@ -170,4 +203,5 @@ class GoveeBluetoothLight(LightEntity):
         client = await bleak_retry_connector.establish_connection(
             BleakClient, self._ble_device, self.unique_id
         )
+        _LOGGER.debug("Sending command {}", command)
         await client.write_gatt_char(UUID_CONTROL_CHARACTERISTIC, command, False)

@@ -1,1 +1,15 @@
+from enum import Enum
+
 DOMAIN = "govee-ble-lights"
+
+CONF_KEEP_ALIVE = "keep-alive"
+
+class CommandType(Enum):
+    KEEP_ALIVE = [0xAA]
+    SET_POWER = [0x33, 0x01]
+    SET_BRIGHTNESS = [0x33, 0x04]
+    SET_RGB = [0x33, 0x05, 0x02]
+    SET_SCENE = [0x33, 0x05, 0x04]
+    SET_RGBWW_SEGMENTS = [0x33, 0x05, 0x15, 0x01]
+    SET_RELATIVE_BRIGHTNESS_SEGMENTS = [0x33, 0x05, 0x15, 0x02]
+    SET_RGB_SEGMENTS = [0x33, 0x05, 0x0B]

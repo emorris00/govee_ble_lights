@@ -1,10 +1,14 @@
 import array
 
-def prepareSinglePacketData(commandType, data):
-    payload = [*commandType, *data]
+from .const import CommandType
+
+
+def prepareSinglePacketData(commandType: CommandType, data=[]):
+    payload = [*commandType.value, *data]
     packet = array.array("B", payload + [0] * (20 - len(payload)))
     signPacket(packet)
     return packet
+
 
 def prepareMultiplePacketsData(data):
     packets = []
@@ -13,7 +17,7 @@ def prepareMultiplePacketsData(data):
         payload = [0xA3, i]
         if i == 0:
             payload += [0x01, 0x00, 0x02]
-        remaining = 20 - len(payload)
+        remaining = 19 - len(payload)
         payload += data[0:remaining]
         data = data[remaining:]
         payload += [0] * (20 - len(payload))
@@ -28,6 +32,7 @@ def prepareMultiplePacketsData(data):
         signPacket(packet)
 
     return packets
+
 
 def signPacket(data):
     checksum = 0

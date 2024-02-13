@@ -5,19 +5,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_KEEP_ALIVE
 import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[str] = ["light"]
-
-
-class Hub:
-    def __init__(self, hass: HomeAssistant, address: str) -> None:
-        """Init Govee dummy hub."""
-        self.address = address
-
+PLATFORMS: list[str] = ["light", "switch"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Govee BLE device from a config entry."""
@@ -28,8 +21,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady(
             f"Could not find Govee BLE device with address {address}"
         )
+    
+    hass.data.setdefault(DOMAIN, {}).setdefault(entry.entry_id, {})[CONF_KEEP_ALIVE] = entry.data.get(CONF_KEEP_ALIVE, False)
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = Hub(hass, address=address)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
