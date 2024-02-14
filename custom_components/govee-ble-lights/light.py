@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import re
 from array import array
+from collections.abc import Iterable
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional
 
 import bleak_retry_connector
 from bleak import BleakClient
@@ -121,12 +120,10 @@ class GoveeBluetoothLight(LightEntity):
 
     async def async_update(self) -> None:
         if self.hass.data.get(DOMAIN, {}).get(self._entry_id, {}).get(CONF_KEEP_ALIVE, False):
-            await self._send_type(PacketType.KEEP_ALIVE)
+            await self._send(PacketType.KEEP_ALIVE)
 
     async def async_turn_on(self, **kwargs) -> None:
         packets: list[array[int]] = [prepare_packet(PacketType.SET_POWER, [0x01])]
-
-        self._state = True
 
         if ATTR_BRIGHTNESS in kwargs:
             brightness = kwargs.get(ATTR_BRIGHTNESS, 255)
@@ -160,21 +157,23 @@ class GoveeBluetoothLight(LightEntity):
                         scence_param = special_effect["scenceParam"]
 
                     if scence_param:
-                        packets += prepare_scene_data_packets(data=base64.b64decode(scence_param))
+                        packets += prepare_scene_data_packets(scence_param)
 
                     packets.append(prepare_packet(PacketType.SET_SCENE, scene_code.to_bytes(2, "little")))
 
         for packet in packets:
-            await self._send(packet)
+            await self._send_packet(packet)
+
+        self._state = True
 
     async def async_turn_off(self) -> None:
-        await self._send(prepare_packet(PacketType.SET_POWER, [0x00]))
+        await self._send(PacketType.SET_POWER, 0x00)
         self._state = False
 
-    async def _send_type(self, type: PacketType, data: Optional[list[int] | bytes] = None):
-        await self._send(prepare_packet(type, data))
+    async def _send(self, *args: PacketType | int | Iterable[int] | None):
+        await self._send_packet(prepare_packet(*args))
 
-    async def _send(self, packet: array[int], response=False):
+    async def _send_packet(self, packet: array[int]):
         client = await bleak_retry_connector.establish_connection(BleakClient, self._ble_device, self.unique_id)
         _LOGGER.debug("Sending command %s", packet)
-        return await client.write_gatt_char(UUID_CONTROL_CHARACTERISTIC, packet, response)
+        return await client.write_gatt_char(UUID_CONTROL_CHARACTERISTIC, packet)

@@ -1,15 +1,22 @@
+import base64
 from array import array
+from collections.abc import Iterable
 
 from .const import PacketType
 
+PacketArg = PacketType | int | Iterable[int] | None
 
-def prepare_packet(type: PacketType | None = None, data: list[int] | bytes | None = None) -> array[int]:
+
+def prepare_packet(*args: PacketArg) -> array[int]:
     packet = []
-    if type is not None:
-        packet += type.value
-
-    if data is not None:
-        packet += data
+    for arg in args:
+        match arg:
+            case PacketType():
+                packet += arg.value
+            case int():
+                packet.append(arg)
+            case [*ints]:
+                packet += ints
 
     if len(packet) == 0:
         raise ValueError("Packet is empty")
@@ -24,7 +31,8 @@ def prepare_packet(type: PacketType | None = None, data: list[int] | bytes | Non
     return packet
 
 
-def prepare_scene_data_packets(data: list[int] | bytes) -> list[array[int]]:
+def prepare_scene_data_packets(scene_data: str) -> list[array[int]]:
+    data = base64.b64decode(scene_data)
     packets = []
     i = 0
     while len(data) > 0:
