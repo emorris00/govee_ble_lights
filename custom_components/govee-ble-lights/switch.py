@@ -20,7 +20,7 @@ class KeepAliveSwitch(SwitchEntity):
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, config_entry: ConfigEntry) -> None:
-        self._mac = config_entry.unique_id
+        self._mac = config_entry.unique_id or ""
         self._model = config_entry.data[CONF_MODEL]
         self._entry_id = config_entry.entry_id
 
@@ -38,7 +38,7 @@ class KeepAliveSwitch(SwitchEntity):
         return self._mac.replace(":", "")
 
     @property
-    def is_on(self):
+    def is_on(self, **kwargs):
         return self.hass.data.get(DOMAIN, {}).get(self._entry_id, {}).get(CONF_KEEP_ALIVE, False)
 
     def turn_on(self, **kwargs):
