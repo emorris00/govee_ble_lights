@@ -4,6 +4,7 @@ DOMAIN = "govee-ble-lights"
 
 CONF_KEEP_ALIVE = "keep-alive"
 
+
 class CommandType(Enum):
     KEEP_ALIVE = [0xAA]
     SET_POWER = [0x33, 0x01]

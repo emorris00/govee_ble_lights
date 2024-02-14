@@ -3,8 +3,10 @@ import array
 from .const import CommandType
 
 
-def prepareSinglePacketData(commandType: CommandType, data=[]):
-    payload = [*commandType.value, *data]
+def prepareSinglePacketData(commandType: CommandType, data: bytes | list[int] | None = None):
+    payload = [*commandType.value]
+    if data is not None:
+        payload += data
     packet = array.array("B", payload + [0] * (20 - len(payload)))
     signPacket(packet)
     return packet

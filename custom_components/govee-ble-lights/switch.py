@@ -1,21 +1,18 @@
-from homeassistant.components.switch import (
-    SwitchEntity,
-)
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.components.switch import SwitchEntity
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    CONF_MODEL,
     EntityCategory,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_MODEL
+from homeassistant.helpers.device_registry import DeviceInfo
 
-from .const import DOMAIN, CONF_KEEP_ALIVE
+from .const import CONF_KEEP_ALIVE, DOMAIN
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities
-):
+async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities):
     async_add_entities([KeepAliveSwitch(config_entry)])
+
 
 class KeepAliveSwitch(SwitchEntity):
     _attr_has_entity_name = True
@@ -30,9 +27,7 @@ class KeepAliveSwitch(SwitchEntity):
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={
-                (DOMAIN, self.unique_id)
-            },
+            identifiers={(DOMAIN, self.unique_id)},
             name="Govee {}".format(self._model),
             manufacturer="Govee",
             model=self._model,

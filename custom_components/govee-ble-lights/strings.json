@@ -1,0 +1,15 @@
+{
+    "config": {
+        "flow_title": "Discovered Device ({name})",
+        "step": {
+            "user": {
+                "title": "Govee BLE Light",
+                "data": {
+                    "address": "Device",
+                    "model": "Model",
+                    "keep-alive": "Keep Alive"
+                }
+            }
+        }
+    }
+}
