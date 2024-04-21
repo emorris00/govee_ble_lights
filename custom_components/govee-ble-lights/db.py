@@ -25,9 +25,6 @@ class DeviceInfo:
     temp_range: tuple[int, int] | None
     segments: list[list[int]] | None
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     @cached_property
     def scenes(self) -> list[Scene]:
         result = []
@@ -67,13 +64,12 @@ def get_device_info(model: str):
                     [1, 2, 3, 4, 5, 6],
                     [7, 8, 9, 10, 11, 12],
                 ],
-                effects={},
             )
 
         case _:
             return DeviceInfo(
+                model="",
                 modes={Mode.MANUAL, Mode.SCENE},
-                effects=[],
                 brightness_scale=(1, 255),
                 temp_range=None,
                 segments=None,

@@ -103,9 +103,11 @@ class Device:
 
             for segment in segments:
                 segment._state.brightness = brightness
+                segment._state.on = brightness > self._data.brightness_scale[0]
         else:
             await self.send(PacketType.SET_BRIGHTNESS, scaled_brightness)
             self._state.brightness = brightness
+            self._state.on = brightness > self._data.brightness_scale[0]
 
     async def set_power(self, on: bool, segments: Optional[Iterable[Segment]] = None):
         if segments:
@@ -176,6 +178,10 @@ class Device:
         else:
             pass
 
+    async def set_effect(self, effect: str):
+        # find scene
+        pass
+
     async def send(self, *args: PacketArg):
         await self.send_packets([prepare_packet(*args)])
 
@@ -216,14 +222,14 @@ class Device:
 
     def _notify_callback(self, _: BleakGATTCharacteristic, packet: bytearray) -> None:
         if packet.startswith(PacketType.GET_BRIGHTNESS.value):
-            self._brightness = packet[2]
+            self._state.brightness = packet[2]
 
         elif packet.startswith(PacketType.GET_POWER.value):
-            self._on = bool(packet[2])
+            self._state.on = bool(packet[2])
 
         elif packet.startswith(PacketType.GET_COLOR_MODE.value):
-            self._color_mode = packet[3]
-            if self._color_mode == 0x15:
+            self._state.mode = Mode(packet[3])
+            if self._state.mode == 0x15:
                 asyncio.create_task(self._update_segments())
 
         elif packet.startswith(PacketType.GET_SEGMENT_INFO.value):

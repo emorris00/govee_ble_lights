@@ -10,11 +10,6 @@ class Mode(StrEnum):
 
 
 @dataclass
-class LightState:
-    on: bool = False
-
-
-@dataclass
 class SegmentState:
     on: bool = False
     brightness: int = 0
